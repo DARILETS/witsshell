@@ -10,6 +10,9 @@
 #define MAX_INPUT_SIZE 1024
 #define MAX_ARG_COUNT 64
 
+char* paths[64] = {"/bin"};
+int path_count = 1;
+
 // Function to parse the input into command and arguments
 void parseInput(char* input, char** args, char** arrayArgs) {
     // Handle newline character
@@ -29,9 +32,36 @@ void parseInput(char* input, char** args, char** arrayArgs) {
     arrayArgs[i] = NULL; 
 }
 
-void executeCommand(char** args) {
-    for (int i = 0; args[i] != NULL; i++) {
-        printf("Argument %d: %s\n", i, args[i]);
+void pathDomain(char** args) {
+    if (args[1] == NULL && path_count>1) {
+        for (int i = 1; i < path_count; i++) {
+            free(paths[i]);
+        }
+        path_count = 1;
+    } else {
+        // Add new paths to the existing list
+        for (int i = 1; args[i] != NULL; i++) {
+            paths[path_count++] = strdup(args[i]);
+        }
+    }
+}
+
+void executeCommand(char** arrayArgs) {
+     if (arrayArgs[0] == NULL) return;
+
+    // In-built path
+     if (strcmp(arrayArgs[0], "path") == 0) {
+        pathDomain(arrayArgs);
+        //return;
+    }
+
+    // Print command
+    for (int i = 0; arrayArgs[i] != NULL; i++) {
+        printf("Argument %d: %s\n", i, arrayArgs[i]);
+    }
+
+    for (int i = 0; i < path_count; i++) {
+            printf("Path %d: %s\n", i, paths[i]);
     }
 }
 
