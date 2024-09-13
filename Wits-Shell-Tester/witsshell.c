@@ -10,7 +10,7 @@
 #define MAX_INPUT_SIZE 1024
 #define MAX_ARG_COUNT 64
 
-char* paths[64] = {"/bin"};
+char* paths[64] = {"/bin/"};
 int path_count = 1;
 
 // Function to parse the input into command and arguments
@@ -32,17 +32,51 @@ void parseInput(char* input, char** args, char** arrayArgs) {
     arrayArgs[i] = NULL; 
 }
 
+//come back and clean
 void pathDomain(char** args) {
-    if (args[1] == NULL && path_count>1) {
+    if (args[1] == NULL && path_count > 1) {
+        // Reset paths if no arguments are provided
         for (int i = 1; i < path_count; i++) {
             free(paths[i]);
         }
         path_count = 1;
     } else {
-        // Add new paths to the existing list
+        // Iterate over each argument provided to the path command
         for (int i = 1; args[i] != NULL; i++) {
-            paths[path_count++] = strdup(args[i]);
+            bool exists = false;
+
+            // Check if the path already exists
+            for (int j = 0; j < path_count; j++) {
+                if (strcmp(paths[j], args[i]) == 0) {
+                    // If the path exists, replace it
+                    paths[j] = strdup(args[i]);
+                    exists = true;
+                    break;
+                }
+            }
+
+            // If the path doesn't exist, add it to the list
+            if (!exists) {
+                paths[path_count++] = strdup(args[i]);
+            }
         }
+    }
+}
+
+void cdDomain(char** args) {
+    // Check if exactly one argument is passed
+    //edit this if statement
+    if (args[1] == NULL || args[2] != NULL) {
+        char error_message[30] = "An error has occurred\n";
+        write(STDERR_FILENO, error_message, strlen(error_message));
+        return;
+    }
+
+    // Try to change directory
+    if (chdir(args[1]) != 0) {
+        // If chdir fails, print an error message
+        char error_message[30] = "An error has occurred\n";
+        write(STDERR_FILENO, error_message, strlen(error_message));
     }
 }
 
@@ -52,17 +86,60 @@ void executeCommand(char** arrayArgs) {
     // In-built path
      if (strcmp(arrayArgs[0], "path") == 0) {
         pathDomain(arrayArgs);
-        //return;
+        return;
     }
 
+    // In-built cd
+    if (strcmp(arrayArgs[0], "cd") == 0) {
+        cdDomain(arrayArgs);
+        return;
+    }
+
+    // handle external commands
+    pid_t pid = fork();
+    if (pid < 0) {
+        // Error during fork
+        char error_message[40] = "An error has occurred, fork error\n";
+        write(STDERR_FILENO, error_message, strlen(error_message));
+        return;
+    }
+    if (pid == 0) { 
+        // execute the command using paths
+        for (int i = 0; i < path_count; i++) {
+            char fullPath[MAX_INPUT_SIZE];
+            snprintf(fullPath, sizeof(fullPath), "%s%s", paths[i], arrayArgs[0]);
+
+            //print fullpath
+           // printf("Full path: %s\n", fullPath);
+
+            // Check if the command is executable in the current path
+            if (access(fullPath, X_OK) == 0) {
+                execv(fullPath, arrayArgs); // Execute the command
+                // If execv returns, it failed
+                char error_message[40] = "An error has occurred, execv error\n";
+                write(STDERR_FILENO, error_message, strlen(error_message));
+                exit(1);
+            }
+         }
+
+        // If no path worked, command not found
+        char error_message[50] = "An error has occurred, no path worked\n";
+        write(STDERR_FILENO, error_message, strlen(error_message));
+        exit(1);
+
+    } else { 
+        // Parent process: Wait for the child process to complete
+        int status;
+        waitpid(pid, &status, 0);
+    }
+    
     // Print command
-    for (int i = 0; arrayArgs[i] != NULL; i++) {
-        printf("Argument %d: %s\n", i, arrayArgs[i]);
-    }
-
-    for (int i = 0; i < path_count; i++) {
-            printf("Path %d: %s\n", i, paths[i]);
-    }
+    // for (int i = 0; arrayArgs[i] != NULL; i++) {
+    //     printf("Argument %d: %s\n", i, arrayArgs[i]);
+    // }
+    // for (int i = 0; i < path_count; i++) {
+    //         printf("Path %d: %s\n", i, paths[i]);
+    // }
 }
 
 
