@@ -1,8 +1,4 @@
-batch.txt
-packages.microsoft.gpg
-test
 test-witsshell.sh
-test.cpp
 tester
 tests
 tests-out
