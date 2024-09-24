@@ -7,18 +7,19 @@
 #include <assert.h>
 #include <fcntl.h>
 #include <ctype.h>
-
 #define MAX_INPUT_SIZE 1024
 #define MAX_ARG_COUNT 64
 
 char* paths[64];
+// Default bin path specified in main function
 int path_count = 1;
 
+// Handle redirection 
 void handleRedirection(char** args, int redirect_location) {
     // Extract the filename
     char* filename = args[redirect_location + 1];
     args[redirect_location] = NULL; 
-    args[redirect_location + 1] = NULL;// Null-terminate the command arguments
+    args[redirect_location + 1] = NULL;
 
     // Open the file for writing (truncate if it exists) 
     int output = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
@@ -57,7 +58,7 @@ void handleRedirection(char** args, int redirect_location) {
          }
 
         // If no path worked, command not found
-        char error_message[50] = "An error has occurred\n";
+        char error_message[30] = "An error has occurred\n";
         write(STDERR_FILENO, error_message, strlen(error_message));
         exit(1);
     } else { // Parent process
@@ -68,33 +69,28 @@ void handleRedirection(char** args, int redirect_location) {
 
 // Function to parse the input into command and arguments
 void parseInput(char* input, char** args, char** arrayArgs) {
-    char* redirect = strchr(input, '>');
     
+    //Handle special case of redirect where there's no spaces between ">" character
+    char* redirect = strchr(input, '>');
     if (redirect != NULL) {
         int pos = redirect - input; // Index of ">" in the input string
-
         // Check if the character before ">" is a space, if not, adjust
         if (pos > 0 && input[pos - 1] != ' ') {
-            // Shift all characters starting from pos-1 one place to the right
             memmove(&input[pos + 1], &input[pos], strlen(input) - pos + 1);
-            input[pos] = ' '; // Insert space before ">"
-            pos++; // Adjust pos due to the shift
+            input[pos] = ' ';
+            pos++;
         }
-
         // Check if the character after ">" is a space, if not, adjust
         if (input[pos + 1] != ' ') {
-            // Shift all characters after ">" one place to the right
             memmove(&input[pos + 2], &input[pos + 1], strlen(input) - pos);
-            input[pos + 1] = ' '; // Insert space after ">"
+            input[pos + 1] = ' ';
         }
     }
-
+    //normal parsing procedure, add commands and arguments to array
     int i;
     for (i = 0; i < MAX_ARG_COUNT; i++) {
         args[i] = strsep(&input, " ");
-        //handle special case of ">"
         if (args[i] == NULL) break;
-        
         if (strlen(args[i]) == 0) {
             i--; // Skip empty strings
         } else {
@@ -104,7 +100,7 @@ void parseInput(char* input, char** args, char** arrayArgs) {
     arrayArgs[i] = NULL; 
 }
 
-//come back and clean
+// Handle path
 void pathDomain(char** args) {
     if (args[1] == NULL) {
         // Reset paths if no arguments are provided
@@ -116,7 +112,6 @@ void pathDomain(char** args) {
         for (int i = 1; args[i] != NULL; i++) {
             bool exists = false;
             char fullPath[MAX_INPUT_SIZE];
-
             // Check if the path already exists
             for (int j = 0; j < path_count; j++) {
                 if (strcmp(paths[j], args[i]) == 0) {
@@ -126,7 +121,6 @@ void pathDomain(char** args) {
                     break;
                 }
             }
-
             if (!exists) {
                 if (args[i][0] == '/') {
                     // If the input is an absolute path (starts with /), use it as is
@@ -143,7 +137,6 @@ void pathDomain(char** args) {
                         return;
                     }
                 }
-
                 // Add the constructed fullPath to the paths array
                 paths[path_count++] = strdup(fullPath);
             }
@@ -151,7 +144,7 @@ void pathDomain(char** args) {
     }
 }
 
-
+// Handle cd
 void cdDomain(char** args) {
     // Check if exactly one argument is passed
     //edit this if statement
@@ -169,6 +162,7 @@ void cdDomain(char** args) {
     }
 }
 
+// handle execution of commands
 void executeCommand(char** arrayArgs) {
      if (arrayArgs[0] == NULL) return;
 
@@ -180,13 +174,8 @@ void executeCommand(char** arrayArgs) {
     // In-built path
      if (strcmp(arrayArgs[0], "path") == 0) {
         pathDomain(arrayArgs);
-        // Print path
-    //     for (int i = 0; i < path_count; i++) {
-    //         printf("Path %d: %s\n", i, paths[i]);
-    // }
         return;
     }
-
 
     // In-built cd
     if (strcmp(arrayArgs[0], "cd") == 0) {
@@ -200,6 +189,7 @@ void executeCommand(char** arrayArgs) {
         write(STDERR_FILENO, error_message, strlen(error_message));
         exit(0);
     }
+
     //handle redirection:
     int redirect_location = -1;
     for (int i = 0; arrayArgs[i] != NULL; i++) {
@@ -208,8 +198,6 @@ void executeCommand(char** arrayArgs) {
             break;
         }
     }
-
-
     if (redirect_location != -1) {
         // Ensure there's only one redirection operator
         if (arrayArgs[redirect_location + 1] == NULL || 
@@ -218,7 +206,6 @@ void executeCommand(char** arrayArgs) {
             write(STDERR_FILENO, error_message, strlen(error_message));
             return;
     }
-
     handleRedirection(arrayArgs, redirect_location);
     }
     else{
@@ -236,9 +223,6 @@ void executeCommand(char** arrayArgs) {
             char fullPath[MAX_INPUT_SIZE];
             snprintf(fullPath, sizeof(fullPath), "%s%s", paths[i], arrayArgs[0]);
 
-            //print fullpath
-           // printf("Full path: %s\n", fullPath);
-
             // Check if the command is executable in the current path
             if (access(fullPath, X_OK) == 0) {
                 execv(fullPath, arrayArgs); // Execute the command
@@ -253,17 +237,15 @@ void executeCommand(char** arrayArgs) {
         char error_message[30] = "An error has occurred\n";
         write(STDERR_FILENO, error_message, strlen(error_message));
         exit(1);
-
     } else { 
         // Parent process: Wait for the child process to complete
         int status;
         waitpid(pid, &status, 0);
     }
-    
     }
 }
 
-//edit
+// Handle parallel commands
 void runParallelCommands(char* input) {
 
     char* commands[MAX_ARG_COUNT];
@@ -296,7 +278,6 @@ void runParallelCommands(char* input) {
     }
 }
 
-
 int main(int MainArgc, char *MainArgv[]){
 
     // Input and arguments definitions
@@ -304,8 +285,8 @@ int main(int MainArgc, char *MainArgv[]){
     char* args[MAX_ARG_COUNT];
     char* arrayArgs[MAX_ARG_COUNT];
     FILE* inputFile = stdin;
+    //initial path in path array
     paths[0] = strdup("/bin/");
-
     // Batch Mode handler
     if (MainArgc == 2) {
     inputFile = fopen(MainArgv[1], "r"); // Read the file
@@ -321,7 +302,6 @@ int main(int MainArgc, char *MainArgv[]){
         write(STDERR_FILENO, error_message, strlen(error_message));
         return 1;
     }
-
 
     // Loop for Interactive and Batch mode
     while (1) {
@@ -340,14 +320,14 @@ int main(int MainArgc, char *MainArgv[]){
             continue;
         }
 
-        // Handle newline character
+        // Handle newline character from input
         input[strcspn(input, "\n")] = '\0';
         
         // Exit handler
         if (strcmp(input, "exit") == 0) {
             parseInput(input, args, arrayArgs);
-
             if (args[1] != NULL) {
+            //if argument provided then throw an error
             char error_message[30] = "An error has occurred\n";
             write(STDERR_FILENO, error_message, strlen(error_message));
             }
@@ -355,25 +335,21 @@ int main(int MainArgc, char *MainArgv[]){
             break;
             }
         }
+        //handles parallel commands
         else if (strchr(input, '&')){
             runParallelCommands(input);
         }
         else{
-            //handle input 
+            //handles input 
             parseInput(input, args, arrayArgs);
             executeCommand(arrayArgs);
         }
-
-        
-        
     }
 
-    // Cleanup (evaluate)
+    // Handle memory
     free(input); // Free the input buffer
     if (inputFile != stdin) {
         fclose(inputFile); // Close the batch file if in batch mode
     }
-
-    //batch mode
     return 0;
 }
